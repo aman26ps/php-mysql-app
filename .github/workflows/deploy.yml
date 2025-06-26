@@ -1,0 +1,105 @@
+name: Deploy PHP App to EC2 with Docker Compose
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: php-mysql-app
+  IMAGE_TAG: latest
+  STACK_NAME: php-app-stack
+
+jobs:
+  deploy:
+    name: Build, Provision Infra, Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubOIDCDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image using docker-compose
+        run: |
+          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          export IMAGE_URI=$IMAGE_URI
+
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml build app
+          docker tag php-app $IMAGE_URI
+          docker push $IMAGE_URI
+
+      - name: Deploy CloudFormation Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/ec2-rds-alb.yml \
+            --stack-name $STACK_NAME \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Get EC2 Instance ID
+        id: get-instance
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=PHPAppEC2" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" --output text)
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+      - name: Upload init.sql to EC2
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
+            --comment "Upload init.sql" \
+            --parameters 'commands=[
+              "echo "$(cat docker/init.sql | sed 's/\"/\\\"/g')" > /home/ubuntu/init.sql"
+            ]' \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Initialize RDS with test table
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
+            --comment "Initialize RDS" \
+            --parameters 'commands=[
+              "sudo apt-get update && sudo apt-get install -y mysql-client",
+              "DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)",
+              "DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)",
+              "mysql -h ${RDS_HOST} -u$DB_USER -p$DB_PASS testdb < /home/ubuntu/init.sql"
+            ]' \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Trigger SSM command to pull and run Docker container
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
+            --comment "Pull and run updated Docker image" \
+            --parameters 'commands=[
+              "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com",
+              "docker stop $(docker ps -q --filter ancestor=${{ env.ECR_REPOSITORY }}) || true",
+              "docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}",
+              "DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)",
+              "DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)",
+              "docker run -d -p 80:80 \\",
+              "  -e DB_HOST=${RDS_HOST} \\",
+              "  -e DB_NAME=testdb \\",
+              "  -e DB_USER=$DB_USER \\",
+              "  -e DB_PASS=$DB_PASS \\",
+              "  ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+            ]' \
+            --region ${{ env.AWS_REGION }}
