@@ -50,6 +50,15 @@ jobs:
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
+      - name: Fetch RDS Host from CloudFormation Output
+        id: rds
+        run: |
+          RDS_HOST=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue" \
+            --output text)
+          echo "RDS_HOST=$RDS_HOST" >> $GITHUB_ENV
+
       - name: Get EC2 Instance ID
         id: get-instance
         run: |
@@ -79,7 +88,7 @@ jobs:
               "sudo apt-get update && sudo apt-get install -y mysql-client",
               "DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)",
               "DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)",
-              "mysql -h ${RDS_HOST} -u$DB_USER -p$DB_PASS testdb < /home/ubuntu/init.sql"
+              "mysql -h $RDS_HOST -u$DB_USER -p$DB_PASS testdb < /home/ubuntu/init.sql"
             ]' \
             --region ${{ env.AWS_REGION }}
 
@@ -96,7 +105,7 @@ jobs:
               "DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)",
               "DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)",
               "docker run -d -p 80:80 \\",
-              "  -e DB_HOST=${RDS_HOST} \\",
+              "  -e DB_HOST=$RDS_HOST \\",
               "  -e DB_NAME=testdb \\",
               "  -e DB_USER=$DB_USER \\",
               "  -e DB_PASS=$DB_PASS \\",
