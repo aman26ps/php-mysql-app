@@ -21,6 +21,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python (for cfn-lint)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install cfn-lint
+        run: pip install cfn-lint
+
+      - name: Lint CloudFormation templates
+        run: |
+          find cloudformation -name "*.yml" -o -name "*.yaml" | xargs cfn-lint
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -47,12 +59,11 @@ jobs:
             echo "KeyPair already exists. Skipping creation."
           fi
 
-
       - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy \
             --template-file cloudformation/ec2-rds-alb.yml \
-            --stack-name $STACK_NAME \
+            --stack-name "$STACK_NAME" \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
@@ -73,16 +84,22 @@ jobs:
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters Name=tag:Name,Values=PHPAppEC2 \
-            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+            --query 'Reservations[0].Instances[0].InstanceId' \
+            --output text)
+
+          RDS_HOST=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue" \
+            --output text)
 
           aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy latest Docker image" \
-            --parameters 'commands=[
-              "docker pull $REPO_URI:$IMAGE_TAG",
+            --parameters commands='[
+              "docker pull '"$REPO_URI:$IMAGE_TAG"'",
               "docker stop php_app || true",
               "docker rm php_app || true",
-              "docker run -d --name php_app -p 80:80 -e RDS_HOST=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query \"Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue\" --output text) $REPO_URI:$IMAGE_TAG"
+              "docker run -d --name php_app -p 80:80 -e RDS_HOST='"$RDS_HOST"' '"$REPO_URI:$IMAGE_TAG"'"
             ]' \
             --region $AWS_REGION
