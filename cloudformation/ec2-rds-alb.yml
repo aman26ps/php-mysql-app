@@ -16,18 +16,13 @@ Parameters:
     Type: String
     Default: phpuser
 
-  DBPassword:
-    NoEcho: true
-    Type: String
-    Default: phppass
-
 Resources:
   AppECRRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: php-mysql-app
       ImageScanningConfiguration:
-        scanOnPush: true
+        ScanOnPush: true
       EncryptionConfiguration:
         EncryptionType: AES256
 
@@ -153,7 +148,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:/phpapp/db-password:1}}'
       VPCSecurityGroups:
         - !GetAtt MySecurityGroup.GroupId
       DBSubnetGroupName: !Ref DBSubnetGroup
