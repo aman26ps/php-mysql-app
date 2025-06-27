@@ -1,20 +1,40 @@
----
 AWSTemplateFormatVersion: '2010-09-09'
-Description: PHP App with EC2, RDS, ALB, ECR, and SSM-managed Docker deployment with secure DB credentials
+Description: EC2, RDS, ALB, ECR setup for PHP App
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.micro
+  DBUsername:
+    NoEcho: true
+    Type: String
+    Default: phpuser
+  DBPassword:
+    NoEcho: true
+    Type: String
+    Default: phppass
 
 Resources:
 
-  ECRRepository:
+  AppECRRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: php-mysql-app
+      ImageScanningConfiguration:
+        scanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
 
-  VPC:
+  MyVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
       EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: PHPAppVPC
@@ -22,17 +42,13 @@ Resources:
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref MyVPC
       CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
       MapPublicIpOnLaunch: true
-      AvailabilityZone: !Select [0, !GetAZs '']
-
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PHPAppPublicSubnet
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -40,67 +56,65 @@ Resources:
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
+      VpcId: !Ref MyVPC
       InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
 
-  RouteTable:
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref MyVPC
 
-  Route:
+  PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref RouteTable
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnetRouteTableAssociation:
+  SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref RouteTable
+      RouteTableId: !Ref PublicRouteTable
 
-  ALBSecurityGroup:
+  MySecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB SG
-      VpcId: !Ref VPC
+      GroupDescription: Enable HTTP and SSH access
+      VpcId: !Ref MyVPC
       SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: EC2 SG
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-
-  RDSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: RDS SG
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          CidrIp: 0.0.0.0/0
 
-  InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+  EC2Instance:
+    Type: AWS::EC2::Instance
     Properties:
-      Roles: [!Ref EC2Role]
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: ami-0c55b159cbfafe1f0  # Use latest Ubuntu/Debian AMI in your region
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref PublicSubnet
+          GroupSet:
+            - !Ref MySecurityGroup
+      Tags:
+        - Key: Name
+          Value: PHPAppEC2
+      IamInstanceProfile: !Ref EC2InstanceProfile
 
-  EC2Role:
+  EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -111,120 +125,57 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
       Policies:
-        - PolicyName: AllowSSMParameters
+        - PolicyName: PHPAppEC2Policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - ssm:GetParameter
-                Resource:
-                  - arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/phpapp/*
+                  - "ssm:*"
+                  - "ecr:*"
+                  - "logs:*"
+                Resource: "*"
 
-  EC2Instance:
-    Type: AWS::EC2::Instance
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceType: t3.micro
-      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2
-      SubnetId: !Ref PublicSubnet
-      SecurityGroupIds: [!Ref EC2SecurityGroup]
-      IamInstanceProfile: !Ref InstanceProfile
-      Tags:
-        - Key: Name
-          Value: PHPAppEC2
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          amazon-linux-extras install docker -y
-          service docker start
-          usermod -aG docker ec2-user
-          yum install -y awscli
+      Roles:
+        - !Ref EC2InstanceRole
 
-          DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)
-          DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)
-
-          aws ecr get-login-password --region ${AWS::Region} | \
-          docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
-
-          docker run -d -p 80:80 \
-            -e DB_HOST=${RDSInstance.Endpoint.Address} \
-            -e DB_NAME=testdb \
-            -e DB_USER=$DB_USER \
-            -e DB_PASS=$DB_PASS \
-            ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/php-mysql-app:latest
-
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: PHPAppALB
-      Subnets: [!Ref PublicSubnet]
-      SecurityGroups: [!Ref ALBSecurityGroup]
-      Scheme: internet-facing
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: "60"
-
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      VpcId: !Ref VPC
-      Protocol: HTTP
-      Port: 80
-      TargetType: instance
-      HealthCheckPath: /
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ALB
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-
-  ALBRegisterTarget:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref ALBTargetGroup
-      TargetId: !Ref EC2Instance
-      Port: 80
-
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: PHP App Subnet Group
-      SubnetIds: [!Ref PrivateSubnet]
-
-  RDSInstance:
+  MyDBInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       DBName: testdb
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      MasterUsername: !Sub '{{resolve:ssm-secure:/phpapp/db_username:1}}'
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:/phpapp/db_password:1}}'
-      VPCSecurityGroups: [!Ref RDSSecurityGroup]
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      VPCSecurityGroups:
+        - !GetAtt MySecurityGroup.GroupId
       DBSubnetGroupName: !Ref DBSubnetGroup
-      PubliclyAccessible: false
-      MultiAZ: false
+      PubliclyAccessible: true
+      DeletionProtection: false
       BackupRetentionPeriod: 0
 
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DB Subnet Group
+      SubnetIds:
+        - !Ref PublicSubnet
+
 Outputs:
-  ALBUrl:
-    Value: !Sub "http://${ALB.DNSName}"
-    Description: Public ALB URL to access the PHP app
 
   RDSHost:
-    Value: !GetAtt RDSInstance.Endpoint.Address
-    Description: Hostname of the RDS instance
+    Description: RDS endpoint
+    Value: !GetAtt MyDBInstance.Endpoint.Address
+    Export:
+      Name: RDSHost
 
-  ECRRepositoryUri:
-    Value: !GetAtt ECRRepository.RepositoryUri
-    Description: ECR repository URI for the PHP app image
+  ECRRepoUri:
+    Description: URI of ECR repository
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/php-mysql-app"
+    Export:
+      Name: ECRRepoUri
