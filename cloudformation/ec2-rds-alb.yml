@@ -31,9 +31,10 @@ jobs:
         run: |
           if ! aws ec2 describe-key-pairs --key-names php-app-key 2>/dev/null; then
             echo "Creating EC2 KeyPair from SSM parameter..."
-            PUBLIC_KEY=$(aws ssm get-parameter --name "/phpapp/public-key" --query 'Parameter.Value' --output text)
+            PUBLIC_KEY=$(aws ssm get-parameter --name "/phpapp/public-key" --region $AWS_REGION --query 'Parameter.Value' --output text)
             aws ec2 import-key-pair \
               --key-name php-app-key \
+              --region $AWS_REGION \
               --public-key-material "$PUBLIC_KEY"
           else
             echo "KeyPair already exists. Skipping creation."
