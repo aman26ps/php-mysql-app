@@ -1,25 +1,22 @@
-name: Deploy PHP App to EC2 with Docker Compose
+name: Deploy PHP MySQL App
 
 on:
   push:
     branches:
       - main
 
-env:
-  AWS_REGION: eu-central-1
-  ECR_REPOSITORY: php-mysql-app
-  IMAGE_TAG: latest
-  STACK_NAME: php-app-stack
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   deploy:
-    name: Build, Provision Infra, Deploy
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
-
+    env:
+      AWS_REGION: eu-central-1
+      STACK_NAME: php-app-stack
+      ECR_REPOSITORY: php-mysql-app
+      IMAGE_TAG: latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,10 +24,22 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/cf-role
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_DEPLOY_ROLE_NAME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy CloudFormation Stack
+      - name: Create EC2 KeyPair from SSM (if not exists)
+        run: |
+          if ! aws ec2 describe-key-pairs --key-names php-app-key 2>/dev/null; then
+            echo "Creating EC2 KeyPair from SSM parameter..."
+            PUBLIC_KEY=$(aws ssm get-parameter --name "/phpapp/public-key" --query 'Parameter.Value' --output text)
+            aws ec2 import-key-pair \
+              --key-name php-app-key \
+              --public-key-material "$PUBLIC_KEY"
+          else
+            echo "KeyPair already exists. Skipping creation."
+          fi
+
+      - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy \
             --template-file cloudformation/ec2-rds-alb.yml \
@@ -38,77 +47,33 @@ jobs:
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push Docker image using docker-compose
+      - name: Build & push Docker image to ECR
         run: |
-          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          export IMAGE_URI=$IMAGE_URI
+          REPO_URI=$(aws ecr describe-repositories --repository-names $ECR_REPOSITORY --query 'repositories[0].repositoryUri' --output text)
+          echo "REPO_URI=$REPO_URI" >> $GITHUB_ENV
 
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml build app
-          docker tag php-app $IMAGE_URI
-          docker push $IMAGE_URI      
+          echo "Logging in to ECR..."
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
 
-      - name: Fetch RDS Host from CloudFormation Output
-        id: rds
-        run: |
-          RDS_HOST=$(aws cloudformation describe-stacks \
-            --stack-name $STACK_NAME \
-            --query "Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue" \
-            --output text)
-          echo "RDS_HOST=$RDS_HOST" >> $GITHUB_ENV
+          echo "Building and pushing image..."
+          docker compose -f docker-compose.yml build app
+          docker tag php-mysql-app_app:latest $REPO_URI:$IMAGE_TAG
+          docker push $REPO_URI:$IMAGE_TAG
 
-      - name: Get EC2 Instance ID
-        id: get-instance
+      - name: Update EC2 via SSM
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=PHPAppEC2" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].InstanceId" --output text)
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+            --filters Name=tag:Name,Values=PHPAppEC2 \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
 
-      - name: Upload init.sql to EC2
-        run: |
           aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
-            --comment "Upload init.sql" \
+            --comment "Deploy latest Docker image" \
             --parameters 'commands=[
-              "echo "$(cat docker/init.sql | sed 's/\"/\\\"/g')" > /home/ubuntu/init.sql"
+              "docker pull $REPO_URI:$IMAGE_TAG",
+              "docker stop php_app || true",
+              "docker rm php_app || true",
+              "docker run -d --name php_app -p 80:80 -e RDS_HOST=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query \"Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue\" --output text) $REPO_URI:$IMAGE_TAG"
             ]' \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Initialize RDS with test table
-        run: |
-          aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
-            --comment "Initialize RDS" \
-            --parameters 'commands=[
-              "sudo apt-get update && sudo apt-get install -y mysql-client",
-              "DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)",
-              "DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)",
-              "mysql -h $RDS_HOST -u$DB_USER -p$DB_PASS testdb < /home/ubuntu/init.sql"
-            ]' \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Trigger SSM command to pull and run Docker container
-        run: |
-          aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
-            --comment "Pull and run updated Docker image" \
-            --parameters 'commands=[
-              "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com",
-              "docker stop $(docker ps -q --filter ancestor=${{ env.ECR_REPOSITORY }}) || true",
-              "docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}",
-              "DB_USER=$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --query Parameter.Value --output text)",
-              "DB_PASS=$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --query Parameter.Value --output text)",
-              "docker run -d -p 80:80 \\",
-              "  -e DB_HOST=$RDS_HOST \\",
-              "  -e DB_NAME=testdb \\",
-              "  -e DB_USER=$DB_USER \\",
-              "  -e DB_PASS=$DB_PASS \\",
-              "  ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
-            ]' \
-            --region ${{ env.AWS_REGION }}
+            --region $AWS_REGION
