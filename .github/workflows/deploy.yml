@@ -31,10 +31,22 @@ jobs:
         run: |
           if ! aws ec2 describe-key-pairs --key-names php-app-key 2>/dev/null; then
             echo "Creating EC2 KeyPair from SSM parameter..."
-            PUBLIC_KEY=$(aws ssm get-parameter --name "/phpapp/public-key" --query 'Parameter.Value' --output text)
+            # Fetch the public key from SSM
+            PUBLIC_KEY=$(aws ssm get-parameter \
+              --name "/phpapp/public-key" \
+              --region "$AWS_REGION" \
+              --query 'Parameter.Value' \
+              --output text)
+
+            # Validate and encode: remove non-ASCII characters just in case
+            CLEAN_KEY=$(echo "$PUBLIC_KEY" | iconv -f utf-8 -t ascii//TRANSLIT)
+
+            # Now import the cleaned key
             aws ec2 import-key-pair \
               --key-name php-app-key \
-              --public-key-material "$PUBLIC_KEY"
+              --public-key-material "$CLEAN_KEY" \
+              --region "$AWS_REGION"
+
           else
             echo "KeyPair already exists. Skipping creation."
           fi
