@@ -6,7 +6,6 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: your-ecr-repo/php-app:${TAG:-latest}
     environment:
       - DB_HOST
       - DB_NAME
