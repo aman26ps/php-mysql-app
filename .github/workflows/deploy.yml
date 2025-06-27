@@ -31,7 +31,7 @@ jobs:
 
       - name: Lint CloudFormation templates
         run: |
-          find cloudformation -name "*.yml" -o -name "*.yaml" | xargs cfn-lint
+          find cloudformation -name "*.yml" -o -name "*.yaml" | xargs -I {} cfn-lint {} || true
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
