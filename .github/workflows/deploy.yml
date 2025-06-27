@@ -78,7 +78,7 @@ jobs:
 
           echo "Building and pushing image..."
           docker compose -f docker/docker-compose.yml build app
-          docker tag php-mysql-app_app:latest $REPO_URI:$IMAGE_TAG
+          docker tag php-mysql-app:latest $REPO_URI:$IMAGE_TAG
           docker push $REPO_URI:$IMAGE_TAG
 
       - name: Update EC2 via SSM
