@@ -67,7 +67,7 @@ jobs:
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides KeyName=php-app-key \
             --no-fail-on-empty-changeset
-            
+
       - name: Build & push Docker image to ECR
         run: |
           REPO_URI=$(aws ecr describe-repositories --repository-names $ECR_REPOSITORY --query 'repositories[0].repositoryUri' --output text)
@@ -77,7 +77,7 @@ jobs:
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
 
           echo "Building and pushing image..."
-          docker compose -f docker-compose.yml build app
+          docker compose -f docker/docker-compose.yml build app
           docker tag php-mysql-app_app:latest $REPO_URI:$IMAGE_TAG
           docker push $REPO_URI:$IMAGE_TAG
 
