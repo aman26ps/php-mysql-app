@@ -150,6 +150,15 @@ Resources:
         - Key: Name
           Value: PHPAppEC2
 
+  PHPAppECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: php-mysql-app
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256        
+
 Outputs:
   EC2PublicIP:
     Description: Public IP of EC2
