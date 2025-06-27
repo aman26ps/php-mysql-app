@@ -1,181 +1,79 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: EC2, RDS, ALB, ECR setup for PHP App
+name: Deploy PHP MySQL App
 
-Parameters:
-  KeyName:
-    Description: Name of an existing EC2 KeyPair
-    Type: AWS::EC2::KeyPair::KeyName
-  InstanceType:
-    Description: EC2 instance type
-    Type: String
-    Default: t3.micro
-  DBUsername:
-    NoEcho: true
-    Type: String
-    Default: phpuser
-  DBPassword:
-    NoEcho: true
-    Type: String
-    Default: phppass
+on:
+  push:
+    branches:
+      - main
 
-Resources:
+permissions:
+  id-token: write
+  contents: read
 
-  AppECRRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: php-mysql-app
-      ImageScanningConfiguration:
-        scanOnPush: true
-      EncryptionConfiguration:
-        EncryptionType: AES256
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: eu-central-1
+      STACK_NAME: php-app-stack
+      ECR_REPOSITORY: php-mysql-app
+      IMAGE_TAG: latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  MyVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: PHPAppVPC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/cf-role
+          aws-region: ${{ env.AWS_REGION }}
 
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MyVPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: PHPAppPublicSubnet
+      - name: Create EC2 KeyPair from SSM (if not exists)
+        run: |
+          if ! aws ec2 describe-key-pairs --key-names php-app-key 2>/dev/null; then
+            echo "Creating EC2 KeyPair from SSM parameter..."
+            PUBLIC_KEY=$(aws ssm get-parameter --name "/phpapp/public-key" --query 'Parameter.Value' --output text)
+            aws ec2 import-key-pair \
+              --key-name php-app-key \
+              --public-key-material "$PUBLIC_KEY"
+          else
+            echo "KeyPair already exists. Skipping creation."
+          fi
 
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/ec2-rds-alb.yml \
+            --stack-name $STACK_NAME \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
 
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref MyVPC
-      InternetGatewayId: !Ref InternetGateway
+      - name: Build & push Docker image to ECR
+        run: |
+          REPO_URI=$(aws ecr describe-repositories --repository-names $ECR_REPOSITORY --query 'repositories[0].repositoryUri' --output text)
+          echo "REPO_URI=$REPO_URI" >> $GITHUB_ENV
 
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MyVPC
+          echo "Logging in to ECR..."
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+          echo "Building and pushing image..."
+          docker compose -f docker-compose.prod.yml build app
+          docker tag php-mysql-app_app:latest $REPO_URI:$IMAGE_TAG
+          docker push $REPO_URI:$IMAGE_TAG
 
-  SubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
+      - name: Update EC2 via SSM
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters Name=tag:Name,Values=PHPAppEC2 \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
 
-  MySecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable HTTP and SSH access
-      VpcId: !Ref MyVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0
-
-  EC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      ImageId: ami-0c55b159cbfafe1f0  # Use latest Ubuntu/Debian AMI in your region
-      NetworkInterfaces:
-        - AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          SubnetId: !Ref PublicSubnet
-          GroupSet:
-            - !Ref MySecurityGroup
-      Tags:
-        - Key: Name
-          Value: PHPAppEC2
-      IamInstanceProfile: !Ref EC2InstanceProfile
-
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Path: "/"
-      Policies:
-        - PolicyName: PHPAppEC2Policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "ssm:*"
-                  - "ecr:*"
-                  - "logs:*"
-                Resource: "*"
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref EC2InstanceRole
-
-  MyDBInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBName: testdb
-      AllocatedStorage: 20
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      VPCSecurityGroups:
-        - !GetAtt MySecurityGroup.GroupId
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      PubliclyAccessible: true
-      DeletionProtection: false
-      BackupRetentionPeriod: 0
-
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: DB Subnet Group
-      SubnetIds:
-        - !Ref PublicSubnet
-
-Outputs:
-
-  RDSHost:
-    Description: RDS endpoint
-    Value: !GetAtt MyDBInstance.Endpoint.Address
-    Export:
-      Name: RDSHost
-
-  ECRRepoUri:
-    Description: URI of ECR repository
-    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/php-mysql-app"
-    Export:
-      Name: ECRRepoUri
+          aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy latest Docker image" \
+            --parameters 'commands=[
+              "docker pull $REPO_URI:$IMAGE_TAG",
+              "docker stop php_app || true",
+              "docker rm php_app || true",
+              "docker run -d --name php_app -p 80:80 -e RDS_HOST=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query \"Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue\" --output text) $REPO_URI:$IMAGE_TAG"
+            ]' \
+            --region $AWS_REGION
