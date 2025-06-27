@@ -36,12 +36,12 @@ jobs:
               --region "$AWS_REGION" \
               --query 'Parameter.Value' \
               --output text > public-key.txt
-            
-            cat "public-key.txt"
+
+            cat public-key.txt
 
             aws ec2 import-key-pair \
               --key-name php-app-key \
-              --public-key-material file://public-key.txt \
+              --public-key-material fileb://public-key.txt \
               --region "$AWS_REGION"
           else
             echo "KeyPair already exists. Skipping creation."
