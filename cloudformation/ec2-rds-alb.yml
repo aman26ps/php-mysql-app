@@ -1,51 +1,37 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: EC2, RDS, ALB, ECR setup for PHP App
+Description: Deploy PHP App with RDS and EC2
 
 Parameters:
   KeyName:
-    Description: Name of an existing EC2 KeyPair
-    Type: AWS::EC2::KeyPair::KeyName
-
-  InstanceType:
-    Description: EC2 instance type
     Type: String
-    Default: t3.micro
-
+    Default: php-app-key
   DBUsername:
-    NoEcho: true
     Type: String
-    Default: phpuser
+    Default: admin
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: changeme123
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
 
 Resources:
-  AppECRRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: php-mysql-app
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      EncryptionConfiguration:
-        EncryptionType: AES256
-
   MyVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: PHPAppVPC
-
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MyVPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: PHPAppPublicSubnet
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -56,29 +42,57 @@ Resources:
       VpcId: !Ref MyVPC
       InternetGatewayId: !Ref InternetGateway
 
-  PublicRouteTable:
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref PublicSubnet1Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PHPAppSubnetAZ1
+
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref PublicSubnet2Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PHPAppSubnetAZ2
+
+  RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MyVPC
 
-  PublicRoute:
+  Route:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref RouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  SubnetRouteTableAssociation:
+  SubnetRouteTableAssociationAZ1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ1
+      RouteTableId: !Ref RouteTable
 
-  MySecurityGroup:
+  SubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ2
+      RouteTableId: !Ref RouteTable
+
+  SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP and SSH access
+      GroupDescription: Enable SSH and HTTP access
       VpcId: !Ref MyVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -94,84 +108,52 @@ Resources:
           ToPort: 3306
           CidrIp: 0.0.0.0/0
 
-  EC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      ImageId: ami-0c55b159cbfafe1f0  # Change as per region (Ubuntu 20.04 or latest)
-      NetworkInterfaces:
-        - AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          SubnetId: !Ref PublicSubnet
-          GroupSet:
-            - !Ref MySecurityGroup
-      Tags:
-        - Key: Name
-          Value: PHPAppEC2
-      IamInstanceProfile: !Ref EC2InstanceProfile
-
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Path: "/"
-      Policies:
-        - PolicyName: PHPAppEC2Policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "ssm:*"
-                  - "ecr:*"
-                  - "logs:*"
-                Resource: "*"
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref EC2InstanceRole
-
-  MyDBInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBName: testdb
-      AllocatedStorage: 20
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:/phpapp/db_password:1}}'
-      VPCSecurityGroups:
-        - !GetAtt MySecurityGroup.GroupId
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      PubliclyAccessible: true
-      DeletionProtection: false
-      BackupRetentionPeriod: 0
-
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: DB Subnet Group
+      DBSubnetGroupDescription: Subnet group for RDS
       SubnetIds:
-        - !Ref PublicSubnet
+        - !Ref PublicSubnetAZ1
+        - !Ref PublicSubnetAZ2
+
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      Engine: MySQL
+      EngineVersion: 8.0.36
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      VPCSecurityGroups:
+        - !Ref SecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: true
+      MultiAZ: false
+      DeletionProtection: false
+      BackupRetentionPeriod: 0
+
+  PHPAppEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      KeyName: !Ref KeyName
+      ImageId: ami-0c7217cdde317cfec # Amazon Linux 2023 AMI (HVM)
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref PublicSubnetAZ1
+          GroupSet:
+            - !Ref SecurityGroup
+      Tags:
+        - Key: Name
+          Value: PHPAppEC2
 
 Outputs:
-  RDSHost:
-    Description: RDS endpoint
-    Value: !GetAtt MyDBInstance.Endpoint.Address
-    Export:
-      Name: RDSHost
+  EC2PublicIP:
+    Description: Public IP of EC2
+    Value: !GetAtt PHPAppEC2.PublicIp
 
-  ECRRepoUri:
-    Description: URI of ECR repository
-    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/php-mysql-app"
-    Export:
-      Name: ECRRepoUri
+  RDSHost:
+    Description: RDS Endpoint
+    Value: !GetAtt MyDB.Endpoint.Address
