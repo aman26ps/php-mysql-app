@@ -36,6 +36,8 @@ jobs:
               --region "$AWS_REGION" \
               --query 'Parameter.Value' \
               --output text > public-key.txt
+            
+            cat "public-key.txt"
 
             aws ec2 import-key-pair \
               --key-name php-app-key \
