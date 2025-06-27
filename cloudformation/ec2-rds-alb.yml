@@ -148,7 +148,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:/phpapp/db-password:1}}'
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:/phpapp/db_password:1}}'
       VPCSecurityGroups:
         - !GetAtt MySecurityGroup.GroupId
       DBSubnetGroupName: !Ref DBSubnetGroup
