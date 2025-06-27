@@ -33,26 +33,25 @@ jobs:
             echo "Creating EC2 KeyPair from SSM parameter..."
             # Fetch the public key from SSM
             # Fetch the public key from SSM
-            PUBLIC_KEY=$(aws ssm get-parameter \
+            # Fetch the base64-encoded key
+            BASE64_KEY=$(aws ssm get-parameter \
               --name "/phpapp/public-key" \
               --region "$AWS_REGION" \
               --query 'Parameter.Value' \
               --output text)
 
-            # Encode to base64 (EC2 expects it that way)
-            ENCODED_KEY=$(echo "$PUBLIC_KEY" | base64 --wrap=0)
+            # Decode it
+            PUBLIC_KEY=$(echo "$BASE64_KEY" | base64 -d)
 
-            # Import the key
+            # Import the decoded key
             aws ec2 import-key-pair \
               --key-name php-app-key \
-              --public-key-material "$ENCODED_KEY" \
-              --region "$AWS_REGION" \
-              --cli-input-json file://<(jq -n --arg name "php-app-key" --arg material "$ENCODED_KEY" \
-                '{KeyName: $name, PublicKeyMaterial: $material}')
+              --public-key-material "$PUBLIC_KEY" \
+              --region "$AWS_REGION"
           else
             echo "KeyPair already exists. Skipping creation."
           fi
-
+          
       - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy \
