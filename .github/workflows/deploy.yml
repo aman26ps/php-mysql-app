@@ -65,8 +65,9 @@ jobs:
             --template-file cloudformation/ec2-rds-alb.yml \
             --stack-name "$STACK_NAME" \
             --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides KeyName=php-app-key \
             --no-fail-on-empty-changeset
-
+            
       - name: Build & push Docker image to ECR
         run: |
           REPO_URI=$(aws ecr describe-repositories --repository-names $ECR_REPOSITORY --query 'repositories[0].repositoryUri' --output text)
