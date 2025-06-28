@@ -117,7 +117,7 @@ Resources:
       AllocatedStorage: 20
       Engine: MySQL
       EngineVersion: 8.0.36
-      MasterUsername: "{{resolve:ssm-secure:/phpapp/db_username:1}}"
+      MasterUsername: "admin"
       MasterUserPassword: "{{resolve:ssm-secure:/phpapp/db_password:1}}"
       VPCSecurityGroups:
         - !Ref SecurityGroup
