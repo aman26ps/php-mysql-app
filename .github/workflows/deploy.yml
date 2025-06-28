@@ -216,11 +216,16 @@ jobs:
               "mkdir -p /opt/monitoring/docker",
               "mkdir -p /opt/monitoring/monitoring",
 
-              "echo ✅ Installing Docker Compose V2...",
-              "mkdir -p ~/.docker/cli-plugins",
-              "curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose",
-              "chmod +x ~/.docker/cli-plugins/docker-compose",
-              "docker compose version || echo '⚠️ Docker Compose not installed correctly'",
+              "echo ✅ Installing Docker Compose V2 system-wide on Amazon Linux 2...",
+              "mkdir -p /usr/local/lib/docker/cli-plugins",
+              "curl -sSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose",
+              "chmod +x /usr/local/lib/docker/cli-plugins/docker-compose",
+
+              "echo 🔁 Linking to docker-compose for fallback...",
+              "ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
+
+              "echo 🔍 Verifying docker compose...",
+              "bash -c \"docker compose version || echo '⚠️ Docker Compose V2 not available'\"",
 
               "echo ✅ Decoding and extracting tarball...",
               "cat <<'EOF' | base64 -d > /opt/monitoring/monitoring.tar.gz",
