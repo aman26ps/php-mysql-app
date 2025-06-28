@@ -100,6 +100,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Deploy latest Docker image" \
             --parameters commands="[
+              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI\",
               \"docker pull $REPO_URI:$IMAGE_TAG\",
               \"docker stop php_app || true\",
               \"docker rm php_app || true\",
