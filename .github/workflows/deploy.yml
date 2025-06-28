@@ -159,14 +159,44 @@ jobs:
 
       - name: Tar and base64 encode monitoring files
         run: |
+          echo "📁 Creating staging folder: deploy/tmp"
           mkdir -p deploy/tmp
+
+          echo "📄 Copying docker-compose.monitoring.yml..."
+          if [ ! -f docker/docker-compose.monitoring.yml ]; then
+            echo "❌ docker-compose.monitoring.yml NOT FOUND"
+            exit 1
+          fi
           cp docker/docker-compose.monitoring.yml deploy/tmp/
+          echo "✅ docker-compose.monitoring.yml copied"
+
+          echo "📄 Copying agent.alloy.template..."
+          if [ ! -f monitoring/agent.alloy.template ]; then
+            echo "❌ agent.alloy.template NOT FOUND"
+            exit 1
+          fi
           cp monitoring/agent.alloy.template deploy/tmp/
-          tar -czf deploy/monitoring.tar.gz -C deploy/tmp .
+          echo "✅ agent.alloy.template copied"
+
+          echo "📦 Creating tarball..."
+          tar -cvzf deploy/monitoring.tar.gz -C deploy/tmp .
+          echo "✅ Tarball created: deploy/monitoring.tar.gz"
+
+          echo "📐 Tarball contents:"
+          tar -tvf deploy/monitoring.tar.gz
+
+          echo "🔐 Encoding tarball to base64..."
           base64 deploy/monitoring.tar.gz > deploy/monitoring.tar.gz.b64
+          echo "✅ Base64 encoding complete"
+
+          echo "📄 Base64 preview (first 10 lines):"
+          head -n 10 deploy/monitoring.tar.gz.b64
+
+          echo "🔁 Exporting FILE_CONTENT to GitHub ENV"
           echo "FILE_CONTENT<<EOF" >> $GITHUB_ENV
           cat deploy/monitoring.tar.gz.b64 >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
+
 
       - name: Send monitoring files and deploy via SSM with logs
         run: |
