@@ -156,6 +156,10 @@ Resources:
                   - ec2messages:*
                   - cloudwatch:PutMetricData
                   - logs:*
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
                 Resource: "*" 
 
   EC2InstanceProfile:
