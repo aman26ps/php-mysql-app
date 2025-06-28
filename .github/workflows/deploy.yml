@@ -159,10 +159,10 @@ jobs:
 
       - name: Tar and base64 encode monitoring files
         run: |
-          mkdir -p deploy
-          tar -czf deploy/monitoring.tar.gz \
-            -C docker docker-compose.monitoring.yml \
-            -C monitoring agent.alloy.template
+          mkdir -p deploy/tmp
+          cp docker/docker-compose.monitoring.yml deploy/tmp/
+          cp monitoring/agent.alloy.template deploy/tmp/
+          tar -czf deploy/monitoring.tar.gz -C deploy/tmp .
           base64 deploy/monitoring.tar.gz > deploy/monitoring.tar.gz.b64
           echo "FILE_CONTENT<<EOF" >> $GITHUB_ENV
           cat deploy/monitoring.tar.gz.b64 >> $GITHUB_ENV
