@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  node-exporter:
+    image: prom/node-exporter
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+
+  grafana-agent:
+    image: grafana/agent
+    container_name: grafana-agent
+    command: ["run", "/etc/agent/agent.alloy"]
+    volumes:
+      - ./agent.alloy:/etc/agent/agent.alloy
+    restart: unless-stopped

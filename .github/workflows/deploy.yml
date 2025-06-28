@@ -157,6 +157,35 @@ jobs:
             echo "✅ SSM command completed successfully"
           fi
 
+      - name: Tar and base64 encode monitoring files
+        run: |
+          mkdir -p deploy
+          tar -czf deploy/monitoring.tar.gz \
+            -C docker docker-compose.monitoring.yml \
+            -C monitoring agent.alloy.template
+          base64 deploy/monitoring.tar.gz > deploy/monitoring.tar.gz.b64
+          echo "FILE_CONTENT<<EOF" >> $GITHUB_ENV
+          cat deploy/monitoring.tar.gz.b64 >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Send monitoring files and deploy via SSM
+        run: |
+          aws ssm send-command \
+            --instance-ids $SSM_INSTANCE_ID \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy monitoring stack (Alloy)" \
+            --parameters 'commands=[
+              "mkdir -p /opt/monitoring/docker",
+              "mkdir -p /opt/monitoring/monitoring",
+              "echo ${{ env.FILE_CONTENT }} | base64 -d > /opt/monitoring/monitoring.tar.gz",
+              "tar -xzf /opt/monitoring/monitoring.tar.gz -C /opt/monitoring/",
+              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /grafana/bearer_token --with-decryption --query Parameter.Value --output text)",
+              "envsubst < /opt/monitoring/monitoring/agent.alloy.template > /opt/monitoring/monitoring/agent.alloy",
+              "docker compose -f /opt/monitoring/docker/docker-compose.monitoring.yml down || true",
+              "docker compose -f /opt/monitoring/docker/docker-compose.monitoring.yml up -d"
+            ]' \
+            --region $AWS_REGION
+
   functional-test:
     needs: deploy
     runs-on: ubuntu-latest
