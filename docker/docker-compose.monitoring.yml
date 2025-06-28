@@ -21,9 +21,11 @@ services:
     restart: unless-stopped
 
   grafana-agent:
-    image: grafana/agent
+    image: grafana/agent:v0.40.3  # legacy config support
     container_name: grafana-agent
-    command: ["run", "/etc/agent/agent.alloy"]
     volumes:
-      - ./agent.alloy:/etc/agent/agent.alloy
+      - ../monitoring/grafana-agent.yaml:/etc/grafana-agent.yaml
+    command: ["--config.file=/etc/grafana-agent.yaml"]
+    environment:
+      - GRAFANA_BEARER_TOKEN=${GRAFANA_BEARER_TOKEN}
     restart: unless-stopped
