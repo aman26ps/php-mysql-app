@@ -83,8 +83,7 @@ jobs:
 
       - name: Update EC2 via SSM
         run: |
-          set -e
-
+          set -euo pipefail
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters Name=tag:Name,Values=PHPAppEC2 \
             --query 'Reservations[0].Instances[0].InstanceId' \
@@ -95,23 +94,23 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='RDSHost'].OutputValue" \
             --output text)
 
-          echo "Sending command to EC2 via SSM..."
+          echo "🔄 Sending command to EC2 via SSM..."
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy latest Docker image" \
-            --parameters commands='[
-              "docker pull '"$REPO_URI:$IMAGE_TAG"'",
-              "docker stop php_app || true",
-              "docker rm php_app || true",
-              "docker run -d --name php_app -p 80:80 -e RDS_HOST='"$RDS_HOST"' '"$REPO_URI:$IMAGE_TAG"'"
-            ]' \
+            --parameters commands="[
+              \"docker pull $REPO_URI:$IMAGE_TAG\",
+              \"docker stop php_app || true\",
+              \"docker rm php_app || true\",
+              \"docker run -d --name php_app -p 80:80 -e RDS_HOST=$RDS_HOST $REPO_URI:$IMAGE_TAG\"
+            ]" \
             --region "$AWS_REGION" \
             --query 'Command.CommandId' \
             --output text)
 
-          echo "Waiting for SSM command to execute..."
-          sleep 15
+          echo "⏳ Waiting for SSM command [$CMD_ID] to execute..."
+          sleep 20  # give the agent time to process
 
           OUTPUT=$(aws ssm get-command-invocation \
             --command-id "$CMD_ID" \
@@ -123,15 +122,19 @@ jobs:
           STDOUT=$(echo "$OUTPUT" | jq -r '.StandardOutputContent')
           STDERR=$(echo "$OUTPUT" | jq -r '.StandardErrorContent')
 
-          echo "::group::SSM Output"
+          echo "::group::📝 SSM Command Output"
           echo "$STDOUT"
           echo "::endgroup::"
 
-          echo "::group::SSM Error"
+          echo "::group::❗SSM Command Error"
           echo "$STDERR"
           echo "::endgroup::"
 
-          if [ "$STATUS" != "Success" ]; then
+          echo "::group::📦 Raw Command Payload"
+          echo "$OUTPUT"
+          echo "::endgroup::"
+
+          if [[ "$STATUS" != "Success" ]]; then
             echo "❌ SSM command failed with status: $STATUS"
             exit 1
           else
