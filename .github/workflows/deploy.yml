@@ -217,7 +217,9 @@ jobs:
               "mkdir -p /opt/monitoring/monitoring",
 
               "echo ✅ Decoding and extracting tarball...",
-              "echo ${{ env.FILE_CONTENT }} | base64 -d > /opt/monitoring/monitoring.tar.gz",
+              "cat <<'EOF' | base64 -d > /opt/monitoring/monitoring.tar.gz",
+              "${{ env.FILE_CONTENT }}",
+              "EOF",
               "tar -xzf /opt/monitoring/monitoring.tar.gz -C /opt/monitoring/",
 
               "echo ✅ Fetching Grafana token from SSM...",
