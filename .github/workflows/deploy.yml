@@ -97,8 +97,8 @@ jobs:
           echo "🔄 Sending command to EC2 via SSM..."
           COMMANDS=$(cat <<EOF
           [
-            "DB_USER=\$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --output text --query Parameter.Value)",
-            "DB_PASS=\$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --output text --query Parameter.Value)",
+            "DB_USER=\$(aws ssm get-parameter --name /phpapp/db_username --with-decryption --output text --query Parameter.Value --region us-east-1)",
+            "DB_PASS=\$(aws ssm get-parameter --name /phpapp/db_password --with-decryption --output text --query Parameter.Value --region us-east-1)",
             "sh -c 'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI'",
             "docker pull $REPO_URI:$IMAGE_TAG",
             "docker stop php_app || true",
