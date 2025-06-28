@@ -105,7 +105,7 @@ jobs:
             "docker rm php_app || true",
             "sh -c 'docker run -d --name php_app -p 80:80 \\
               -e DB_NAME=mysql \\
-              -e RDS_HOST=$RDS_HOST \\
+              -e DB_HOST=$RDS_HOST \\
               -e DB_USER=\$DB_USER \\
               -e DB_PASS=\$DB_PASS \\
               $REPO_URI:$IMAGE_TAG'"
