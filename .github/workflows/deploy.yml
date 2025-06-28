@@ -225,7 +225,7 @@ jobs:
               "ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
 
               "echo 🔍 Verifying docker compose...",
-              "bash -c \"docker compose version || echo '⚠️ Docker Compose V2 not available'\"",
+              "bash -c 'docker compose version || echo \"⚠️ Docker Compose V2 not available\"'",
 
               "echo ✅ Decoding and extracting tarball...",
               "cat <<'EOF' | base64 -d > /opt/monitoring/monitoring.tar.gz",
