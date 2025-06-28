@@ -234,15 +234,15 @@ jobs:
               "tar -xzf /opt/monitoring/monitoring.tar.gz -C /opt/monitoring/",
 
               "echo ✅ Fetching Grafana token from SSM...",
-              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text)",
+              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region us-east-1)",
 
               "echo ✅ Generating agent.alloy config...",
-              "envsubst < /opt/monitoring/monitoring/agent.alloy.template > /opt/monitoring/monitoring/agent.alloy",
+              "envsubst < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
               "cat /opt/monitoring/monitoring/agent.alloy",
 
               "echo ✅ Restarting monitoring stack...",
-              "docker compose -f /opt/monitoring/docker/docker-compose.monitoring.yml down || true",
-              "docker compose -f /opt/monitoring/docker/docker-compose.monitoring.yml up -d",
+              "docker compose -f /opt/monitoring/docker-compose.monitoring.yml down || true",
+              "docker compose -f /opt/monitoring/docker-compose.monitoring.yml up -d",
 
               "echo ✅ Deployment finished."
             ]' \
