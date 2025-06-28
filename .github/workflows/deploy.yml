@@ -216,6 +216,12 @@ jobs:
               "mkdir -p /opt/monitoring/docker",
               "mkdir -p /opt/monitoring/monitoring",
 
+              "echo ✅ Installing Docker Compose V2...",
+              "mkdir -p ~/.docker/cli-plugins",
+              "curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose",
+              "chmod +x ~/.docker/cli-plugins/docker-compose",
+              "docker compose version || echo '⚠️ Docker Compose not installed correctly'",
+
               "echo ✅ Decoding and extracting tarball...",
               "cat <<'EOF' | base64 -d > /opt/monitoring/monitoring.tar.gz",
               "${{ env.FILE_CONTENT }}",
