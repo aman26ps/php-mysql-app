@@ -5,13 +5,6 @@ Parameters:
   KeyName:
     Type: String
     Default: php-app-key
-  DBUsername:
-    Type: String
-    Default: admin
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Default: changeme123
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
@@ -124,8 +117,8 @@ Resources:
       AllocatedStorage: 20
       Engine: MySQL
       EngineVersion: 8.0.36
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: "{{resolve:ssm-secure:/phpapp/db_username:1}}"
+      MasterUserPassword: "{{resolve:ssm-secure:/phpapp/db_password:1}}"
       VPCSecurityGroups:
         - !Ref SecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
