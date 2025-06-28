@@ -170,6 +170,7 @@ Resources:
       InstanceType: t3.micro
       KeyName: !Ref KeyName
       ImageId: ami-0c7217cdde317cfec # Amazon Linux 2023 AMI (HVM)
+      IamInstanceProfile: !Ref EC2InstanceProfile
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
