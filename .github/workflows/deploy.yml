@@ -227,10 +227,15 @@ jobs:
               "chmod +x /usr/local/lib/docker/cli-plugins/docker-compose",
               "ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
 
-              "bash -c 'export PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name php-app-stack --query \"Stacks[0].Outputs[?OutputKey==\\'EC2PublicIP\\'].OutputValue\" --output text --region \"$AWS_REGION\") && \
-              export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region \"$AWS_REGION\") && \
-              echo ✅ PUBLIC_IP is: $PUBLIC_IP && \
-              envsubst \"\\${PUBLIC_IP} \\${GRAFANA_BEARER_TOKEN}\" < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy'"
+              "bash -c ' \
+              echo ✅ Fetching PUBLIC_IP and GRAFANA_BEARER_TOKEN && \
+              PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query \"Stacks[0].Outputs[?OutputKey==\\'EC2PublicIP\\'].OutputValue\" --output text --region $AWS_REGION) && \
+              GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region $AWS_REGION) && \
+              export PUBLIC_IP GRAFANA_BEARER_TOKEN && \
+              echo ✅ Substituting into agent config && \
+              envsubst \"\\${PUBLIC_IP} \\${GRAFANA_BEARER_TOKEN}\" < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy && \
+              cat /opt/monitoring/agent.alloy \
+              '",
 
               "echo ✅ Logging into GHCR",
               "GHCR_TOKEN=$(aws ssm get-parameter --name /phpapp/alloy_token --with-decryption --query Parameter.Value --output text --region '"$AWS_REGION"')",
