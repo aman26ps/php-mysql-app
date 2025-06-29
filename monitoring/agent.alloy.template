@@ -1,9 +1,12 @@
 prometheus.remote_write "grafana" {
   endpoint {
-    url = "https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom/push"
-    headers = {
-      Authorization = "Bearer ${GRAFANA_BEARER_TOKEN}",
-    }
+       name = "hosted-prometheus"
+      url  = "https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom/push"
+  
+      basic_auth {
+        username = "2528351"
+        password = "glc_eyJvIjoiMTQ2OTk5NCIsIm4iOiJzdGFjay0xMzAyMDU4LWFsbG95LWdyYWZhbmEtYWxsb3kiLCJrIjoiNjQ3UnZRYTBwZW8zM2s0TjJvWEswa241IiwibSI6eyJyIjoicHJvZC1ldS13ZXN0LTIifX0="
+      }
   }
 }
 
