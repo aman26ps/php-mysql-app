@@ -5,7 +5,7 @@ prometheus.remote_write "grafana" {
   
       basic_auth {
         username = "2528351"
-        password = "glc_eyJvIjoiMTQ2OTk5NCIsIm4iOiJzdGFjay0xMzAyMDU4LWFsbG95LWdyYWZhbmEtYWxsb3kiLCJrIjoiNjQ3UnZRYTBwZW8zM2s0TjJvWEswa241IiwibSI6eyJyIjoicHJvZC1ldS13ZXN0LTIifX0="
+        password = "${GRAFANA_BEARER_TOKEN}"
       }
   }
 }
