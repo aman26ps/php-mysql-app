@@ -216,7 +216,7 @@ jobs:
               "mkdir -p /opt/monitoring/docker",
               "mkdir -p /opt/monitoring/monitoring",
               
-              "export PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name php-app-stack --query "Stacks[0].Outputs[?OutputKey=='EC2PublicIP'].OutputValue" --output text --region us-east-1)"
+              "export PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name php-app-stack --query "Stacks[0].Outputs[?OutputKey=='EC2PublicIP'].OutputValue" --output text --region us-east-1)",
 
               "echo ✅ Installing Docker Compose V2 system-wide on Amazon Linux 2...",
               "mkdir -p /usr/local/lib/docker/cli-plugins",
