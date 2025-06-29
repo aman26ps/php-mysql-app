@@ -227,8 +227,14 @@ jobs:
               "chmod +x /usr/local/lib/docker/cli-plugins/docker-compose",
               "ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
 
-              "bash -c 'PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query \"Stacks[0].Outputs[?OutputKey==\\'EC2PublicIP\\'].OutputValue\" --output text --region $AWS_REGION) && GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region $AWS_REGION) && export PUBLIC_IP GRAFANA_BEARER_TOKEN && envsubst \"\\${PUBLIC_IP} \\${GRAFANA_BEARER_TOKEN}\" < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy && cat /opt/monitoring/agent.alloy'",
-
+              "echo ✅ Fetching PUBLIC_IP from CloudFormation",
+              "PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} --query \"Stacks[0].Outputs[?OutputKey=='\''EC2PublicIP'\''].OutputValue\" --output text --region ${{ env.AWS_REGION }})",
+              "echo ✅ Fetching Grafana token from SSM",
+              "GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region ${{ env.AWS_REGION }})",
+              "echo ✅ Generating /opt/monitoring/agent.alloy from template",
+              "envsubst \"\\${PUBLIC_IP} \\${GRAFANA_BEARER_TOKEN}\" < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
+              "cat /opt/monitoring/agent.alloy",
+              
               "echo ✅ Logging into GHCR",
               "GHCR_TOKEN=$(aws ssm get-parameter --name /phpapp/alloy_token --with-decryption --query Parameter.Value --output text --region '"$AWS_REGION"')",
               "echo $GHCR_TOKEN | docker login ghcr.io -u aman26ps --password-stdin",
