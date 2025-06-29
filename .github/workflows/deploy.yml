@@ -239,10 +239,9 @@ jobs:
               "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region us-east-1)",
 
               "echo ✅ Generating agent.alloy config...",
-              envsubst '${PUBLIC_IP} ${GRAFANA_BEARER_TOKEN}' < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy,
+              "envsubst '${PUBLIC_IP} ${GRAFANA_BEARER_TOKEN}' < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
               "cat /opt/monitoring/agent.alloy",
-
-              echo $PUBLIC_IP
+              "echo $PUBLIC_IP",
 
               "echo ✅ Logging into GHCR...",
               "GHCR_TOKEN=$(aws ssm get-parameter --name /phpapp/alloy_token --with-decryption --query Parameter.Value --output text --region us-east-1)",
