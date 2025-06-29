@@ -8,16 +8,28 @@ prometheus.remote_write "grafana" {
 }
 
 prometheus.scrape "php_app" {
-  targets = ["http://php_app:80/metrics"]
+  targets = [
+    {
+      url = "http://php_app:80/metrics"
+    },
+  ]
   forward_to = [prometheus.remote_write.grafana.receiver]
 }
 
 prometheus.scrape "cadvisor" {
-  targets = ["http://cadvisor:8080/metrics"]
+  targets = [
+    {
+      url = "http://cadvisor:8080/metrics"
+    },
+  ]
   forward_to = [prometheus.remote_write.grafana.receiver]
 }
 
 prometheus.scrape "node_exporter" {
-  targets = ["http://node-exporter:9100/metrics"]
+  targets = [
+    {
+      url = "http://node-exporter:9100/metrics"
+    },
+  ]
   forward_to = [prometheus.remote_write.grafana.receiver]
 }
