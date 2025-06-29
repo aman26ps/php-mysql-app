@@ -104,7 +104,7 @@ jobs:
               docker pull $REPO_URI:$IMAGE_TAG &&
               docker stop php_app || true &&
               docker rm php_app || true &&
-              docker run -d --name php_app -p 80:80 \
+              docker run -d --name php_app --network monitor-net -p 80:80 \
                 -e DB_NAME=optimy_db \
                 -e DB_HOST=$RDS_HOST \
                 -e DB_USER=\$DB_USER \
