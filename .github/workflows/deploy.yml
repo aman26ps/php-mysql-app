@@ -231,9 +231,10 @@ jobs:
               "docker network ls | grep -q monitor-net || docker network create monitor-net",
 
               "echo ✅ Fetching Grafana token from SSM...",
-              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text)",
+              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region "$AWS_REGION")",
 
               "echo ✅ Generating agent.alloy config...",
+              "rm -rf /opt/monitoring/agent.alloy",
               "envsubst < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
               "cat /opt/monitoring/agent.alloy",
 
