@@ -2,7 +2,7 @@ prometheus.remote_write "grafana" {
   endpoint {
     url = "https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom/push"
     headers = {
-      "Authorization" = "Bearer ${GRAFANA_BEARER_TOKEN}"
+      "Authorization" = "Bearer ${GRAFANA_BEARER_TOKEN}",
     }
   }
 }
