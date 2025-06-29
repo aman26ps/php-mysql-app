@@ -9,7 +9,7 @@ prometheus.remote_write "grafana" {
 
 prometheus.scrape "php_app" {
   targets = [
-    { url = "http://php_app:80/metrics" },
+    { url = "http://php_app:80/metrics.php" },
   ]
   forward_to = [prometheus.remote_write.grafana.receiver]
 }
