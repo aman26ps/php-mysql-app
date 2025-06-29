@@ -20,12 +20,10 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     restart: unless-stopped
 
-  grafana-agent:
-    image: grafana/agent:v0.40.3  # legacy config support
-    container_name: grafana-agent
+  grafana-alloy:
+    image: ghcr.io/grafana/alloy:latest
+    container_name: grafana-alloy
+    command: ["run", "/etc/alloy/agent.alloy"]
     volumes:
-      - ../monitoring/grafana-agent.yaml:/etc/grafana-agent.yaml
-    command: ["--config.file=/etc/grafana-agent.yaml"]
-    environment:
-      - GRAFANA_BEARER_TOKEN=${GRAFANA_BEARER_TOKEN}
+      - ./agent.alloy:/etc/alloy/agent.alloy
     restart: unless-stopped

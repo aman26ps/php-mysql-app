@@ -1,18 +1,11 @@
-server:
-  log_level: info
+prometheus.scrape "php_app" {
+  targets = [ "${PUBLIC_IP}:80" ]
+  forward_to = [ prometheus.remote_write.grafana.receiver ]
+}
 
-metrics:
-  wal_directory: /tmp/grafana-agent-wal
-  global:
-    scrape_interval: 15s
-
-  configs:
-    - name: default
-      scrape_configs:
-        - job_name: 'php-app'
-          static_configs:
-            - targets: ['${PUBLIC_IP}:80']
-
-      remote_write:
-        - url: https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom/push
-          bearer_token: ${GRAFANA_BEARER_TOKEN}
+prometheus.remote_write "grafana" {
+  endpoint {
+    url = "https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom/push"
+    bearer_token = "${GRAFANA_BEARER_TOKEN}"
+  }
+}
