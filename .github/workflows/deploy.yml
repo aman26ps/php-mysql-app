@@ -230,11 +230,11 @@ jobs:
               "echo ✅ Creating shared Docker network if not exists...",
               "docker network ls | grep -q monitor-net || docker network create monitor-net",
 
-              "echo ✅ Fetching Grafana token from SSM",
-              "GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region ${{ env.AWS_REGION }})",
-              "echo ✅ this is the token - $GRAFANA_BEARER_TOKEN",
-              "echo ✅ Generating /opt/monitoring/agent.alloy from template",
-              "envsubst  < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
+              "echo ✅ Fetching Grafana token from SSM...",
+              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text)",
+
+              "echo ✅ Generating agent.alloy config...",
+              "envsubst < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
               "cat /opt/monitoring/agent.alloy",
 
               "echo ✅ Logging into GHCR",
