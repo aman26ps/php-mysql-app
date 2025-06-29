@@ -1,5 +1,5 @@
 prometheus.scrape "php_app" {
-  targets = [ "${PUBLIC_IP}:80" ]
+  targets = [ "3.88.107.202:80" ]
   forward_to = [ prometheus.remote_write.grafana.receiver ]
 }
 
