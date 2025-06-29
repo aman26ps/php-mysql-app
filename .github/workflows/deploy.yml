@@ -238,10 +238,6 @@ jobs:
               "envsubst < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
               "cat /opt/monitoring/agent.alloy",
 
-              "echo ✅ Logging into GHCR",
-              "GHCR_TOKEN=$(aws ssm get-parameter --name /phpapp/alloy_token --with-decryption --query Parameter.Value --output text --region us-east-1)",
-              "echo $GHCR_TOKEN | docker login ghcr.io -u aman26ps --password-stdin",
-
               "echo 🔄 Restarting monitoring stack",
               "docker compose -f /opt/monitoring/docker-compose.monitoring.yml down || true",
               "docker compose -f /opt/monitoring/docker-compose.monitoring.yml up -d",
