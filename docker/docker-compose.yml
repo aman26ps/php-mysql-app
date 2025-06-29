@@ -11,3 +11,9 @@ services:
       - DB_NAME
       - DB_USER
       - DB_PASS
+    networks:
+      - monitor-net  
+
+networks:
+  monitor-net:
+    external: true

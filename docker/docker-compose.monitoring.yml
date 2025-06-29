@@ -7,6 +7,8 @@ services:
     ports:
       - "9100:9100"
     restart: unless-stopped
+    networks:
+      - monitor-net
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -19,6 +21,8 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     restart: unless-stopped
+    networks:
+      - monitor-net
 
   grafana-alloy:
     image: grafana/alloy:latest
@@ -27,3 +31,10 @@ services:
     volumes:
       - ./agent.alloy:/etc/alloy/agent.alloy
     restart: unless-stopped
+    networks:
+      - monitor-net
+
+
+networks:
+  monitor-net:
+    external: true
