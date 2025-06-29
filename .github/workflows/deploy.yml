@@ -185,76 +185,72 @@ jobs:
           echo "📐 Tarball contents:"
           tar -tvf deploy/monitoring.tar.gz
 
-          echo "🔐 Encoding tarball to base64..."
-          base64 deploy/monitoring.tar.gz > deploy/monitoring.tar.gz.b64
+          echo "🔐 Encoding tarball to base64 (single-line)"
+          base64 -w 0 deploy/monitoring.tar.gz > deploy/monitoring.tar.gz.b64
           echo "✅ Base64 encoding complete"
 
-          echo "📄 Base64 preview (first 10 lines):"
-          head -n 10 deploy/monitoring.tar.gz.b64
+          echo "📄 Base64 preview (first 300 chars):"
+          head -c 300 deploy/monitoring.tar.gz.b64; echo
 
           echo "🔁 Exporting FILE_CONTENT to GitHub ENV"
-          echo "FILE_CONTENT<<EOF" >> $GITHUB_ENV
-          cat deploy/monitoring.tar.gz.b64 >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "FILE_CONTENT=$(cat deploy/monitoring.tar.gz.b64)" >> "$GITHUB_ENV"
 
-
-      - name: Send monitoring files and deploy via SSM with logs
+      - name: Deploy monitoring stack to EC2 via SSM
         run: |
-          echo "📤 Sending SSM command to EC2..."
-
+          echo "📡 Resolving EC2 instance by tag Name=PHPAppEC2..."
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters Name=tag:Name,Values=PHPAppEC2 \
             --query 'Reservations[0].Instances[0].InstanceId' \
             --output text)
 
+          echo "📦 Sending deployment command via SSM..."
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids $INSTANCE_ID \
+            --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy monitoring stack (Alloy)" \
+            --comment "Deploy Alloy monitoring" \
             --parameters 'commands=[
-              "echo ✅ Creating monitoring folders...",
-              "mkdir -p /opt/monitoring/docker",
-              "mkdir -p /opt/monitoring/monitoring",
-              
-              "export PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name php-app-stack --query \"Stacks[0].Outputs[?OutputKey=='EC2PublicIP'].OutputValue\" --output text --region us-east-1)",
+              "set -euo pipefail",
 
-              "echo ✅ Installing Docker Compose V2 system-wide on Amazon Linux 2...",
+              "echo ✅ Creating folders",
+              "mkdir -p /opt/monitoring",
+
+              "echo ✅ Decoding tarball...",
+              "echo '"${FILE_CONTENT}"' | base64 -d > /opt/monitoring/monitoring.tar.gz",
+
+              "echo ✅ Extracting...",
+              "tar -xzf /opt/monitoring/monitoring.tar.gz -C /opt/monitoring/",
+              "[[ -f /opt/monitoring/agent.alloy.template ]] || { echo ❌ Missing template; exit 1; }",
+
+              "echo ✅ Installing Docker Compose V2",
               "mkdir -p /usr/local/lib/docker/cli-plugins",
               "curl -sSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose",
               "chmod +x /usr/local/lib/docker/cli-plugins/docker-compose",
-
-              "echo 🔁 Linking to docker-compose for fallback...",
               "ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
 
-              "echo 🔍 Verifying docker compose...",
-              "bash -c \"docker compose version || echo \\\"⚠️ Docker Compose V2 not available\\\"\"",
+              "echo ✅ Getting public IP from CF stack",
+              "export PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name '"$STACK_NAME"' --query \"Stacks[0].Outputs[?OutputKey==\\'EC2PublicIP\\'].OutputValue\" --output text --region '"$AWS_REGION"')",
 
-              "echo ✅ Decoding and extracting tarball...",
-              "cat <<'EOF' | base64 -d > /opt/monitoring/monitoring.tar.gz",
-              "${{ env.FILE_CONTENT }}",
-              "EOF",
-              "tar -xzf /opt/monitoring/monitoring.tar.gz -C /opt/monitoring/",
+              "echo ✅ Getting Grafana token from SSM",
+              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region '"$AWS_REGION"')",
 
-              "echo ✅ Fetching Grafana token from SSM...",
-              "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region us-east-1)",
-
-              "echo ✅ Generating agent.alloy config...",
-              "bash -c 'envsubst \"\\${PUBLIC_IP} \\${GRAFANA_BEARER_TOKEN}\" < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy'",
+              "echo ✅ Generating /opt/monitoring/agent.alloy",
+              "envsubst \"\\${PUBLIC_IP} \\${GRAFANA_BEARER_TOKEN}\" < /opt/monitoring/agent.alloy.template > /opt/monitoring/agent.alloy",
               "cat /opt/monitoring/agent.alloy",
-              "echo \$PUBLIC_IP",
 
+              "echo ✅ Logging into GHCR",
+              "GHCR_TOKEN=$(aws ssm get-parameter --name /phpapp/alloy_token --with-decryption --query Parameter.Value --output text --region '"$AWS_REGION"')",
+              "echo $GHCR_TOKEN | docker login ghcr.io -u aman26ps --password-stdin",
 
-              "echo ✅ Logging into GHCR...",
-              "GHCR_TOKEN=$(aws ssm get-parameter --name /phpapp/alloy_token --with-decryption --query Parameter.Value --output text --region us-east-1)",
-              "docker login ghcr.io -u aman26ps --password-stdin <<< \"$GHCR_TOKEN\"",
-
-              "echo ✅ Restarting monitoring stack...",
+              "echo 🔄 Restarting monitoring stack",
               "docker compose -f /opt/monitoring/docker-compose.monitoring.yml down || true",
               "docker compose -f /opt/monitoring/docker-compose.monitoring.yml up -d",
 
-              "echo ✅ Deployment finished."
+              "echo 🧹 Cleaning up temp files",
+              "rm -f /opt/monitoring/monitoring.tar.gz",
+              
+              "echo ✅ All done!"
             ]' \
-            --region $AWS_REGION \
+            --region "$AWS_REGION" \
             --output text \
             --query 'Command.CommandId')
 
@@ -263,16 +259,19 @@ jobs:
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id $INSTANCE_ID \
-            --region $AWS_REGION
+            --instance-id "$INSTANCE_ID" \
+            --region "$AWS_REGION"
 
-          echo "📄 Fetching command output..."
+          echo "📄 Output:"
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id $INSTANCE_ID \
-            --region $AWS_REGION \
+            --instance-id "$INSTANCE_ID" \
+            --region "$AWS_REGION" \
             --output text \
             --query 'StandardOutputContent'
+        env:
+          AWS_REGION: us-east-1
+          STACK_NAME: php-app-stack
 
   functional-test:
     needs: deploy
