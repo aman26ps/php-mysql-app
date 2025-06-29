@@ -230,13 +230,11 @@ jobs:
               "bash -c \"docker compose version || echo \\\"⚠️ Docker Compose V2 not available\\\"\"",
 
               "echo ✅ Decoding and extracting tarball...",
-              "mkdir -p /opt/monitoring",
               "cat <<'EOF' | base64 -d > /opt/monitoring/monitoring.tar.gz",
-              "${FILE_CONTENT}",
+              "${{ env.FILE_CONTENT }}",
               "EOF",
               "tar -xzf /opt/monitoring/monitoring.tar.gz -C /opt/monitoring/",
-              "if [ -d /opt/monitoring/monitoring ]; then mv /opt/monitoring/monitoring/* /opt/monitoring/ && rm -r /opt/monitoring/monitoring; fi"
-              
+
               "echo ✅ Fetching Grafana token from SSM...",
               "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region us-east-1)",
 
