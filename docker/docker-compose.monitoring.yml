@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
 
   grafana-alloy:
-    image: ghcr.io/grafana/alloy:latest
+    image: grafana/alloy:latest
     container_name: grafana-alloy
     command: ["run", "/etc/alloy/agent.alloy"]
     volumes:
