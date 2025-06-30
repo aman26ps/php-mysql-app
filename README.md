@@ -67,18 +67,18 @@ App available at: `http://localhost:8080`
 
 ```mermaid
 flowchart LR
-  A[🟢 Push to main] --> B[🧪 Lint<br/>CloudFormation Templates]
-  B --> C[🔐 Configure AWS Credentials]
-  C --> D[🗝️ Import EC2 Key Pair]
-  D --> E[🏗️ Deploy Infra<br/>(EC2 + RDS)]
-  E --> F[🐳 Build + Push Docker Image<br/>to ECR]
-  F --> G[🚀 Deploy App to EC2<br/>via SSM]
-  G --> H[📦 Encode Monitoring Files]
-  H --> I[📈 Deploy Monitoring Stack<br/>via SSM]
-  I --> J[🧪 Run Playwright Tests]
+  A[Push to main]
+  B[Lint CloudFormation]
+  C[Configure AWS credentials]
+  D[Create EC2 Key Pair]
+  E[Deploy Infra (EC2 & RDS)]
+  F[Build & Push Docker image]
+  G[Deploy App via SSM]
+  H[Tar + Encode Monitoring Files]
+  I[Deploy Monitoring via SSM]
+  J[Run Functional Tests]
 
-  style A fill:#00b894,color:#fff
-  style J fill:#6c5ce7,color:#fff
+  A --> B --> C --> D --> E --> F --> G --> H --> I --> J
 ```
 ## ☁️ AWS Deployment
 
