@@ -66,20 +66,30 @@ App available at: `http://localhost:8080`
 ## 🔁 CI/CD Pipeline Overview
 
 ```mermaid
-flowchart LR
-  A["Push to main"]
-  B["Lint CloudFormation"]
-  C["Configure AWS credentials"]
-  D["Create EC2 Key Pair"]
-  E["Deploy Infra - EC2 and RDS"]
-  F["Build and Push Docker image"]
-  G["Deploy App via SSM"]
-  H["Encode Monitoring Files"]
-  I["Deploy Monitoring via SSM"]
-  J["Run Functional Tests"]
+flowchart TD
+  Push["Push to main branch"]
+  Checkout["Checkout Code"]
+  Lint["Lint CloudFormation Templates"]
+  AWS["Configure AWS Credentials"]
+  KeyPair["Create EC2 Key Pair from SSM"]
+  CFN["Deploy CloudFormation Stack (EC2 + RDS)"]
+  DockerBuild["Build & Push Docker Image to ECR"]
+  AppDeploy["Deploy App to EC2 via SSM"]
+  Tar["Tar & Base64 Encode Monitoring Files"]
+  MonitoringDeploy["Deploy Monitoring Stack via SSM"]
+  Test["Functional Test with Playwright"]
 
-  A --> B --> C --> D --> E --> F --> G --> H --> I --> J
-```
+  Push --> Checkout
+  Checkout --> Lint
+  Lint --> AWS
+  AWS --> KeyPair
+  KeyPair --> CFN
+  CFN --> DockerBuild
+  DockerBuild --> AppDeploy
+  AppDeploy --> Tar
+  Tar --> MonitoringDeploy
+  MonitoringDeploy --> Test
+```  
 ## ☁️ AWS Deployment
 
 > Requires AWS credentials with CloudFormation, EC2, RDS, and ECR permissions.
