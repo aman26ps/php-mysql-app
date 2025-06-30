@@ -27,4 +27,4 @@ jobs:
 
   functional-test:
     uses: ./.github/workflows/functional-test.yml
-    needs: deploy-app
+    needs: deploy-app-monitoring
