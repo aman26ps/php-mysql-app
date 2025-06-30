@@ -63,32 +63,22 @@ App available at: `http://localhost:8080`
 
 ---
 
-## 🔁 CI/CD Workflow Diagram
+## 🔁 CI/CD Pipeline Overview
 
 ```mermaid
-flowchart TD
-  Push["Push to main branch"]
-  Checkout["Checkout Code"]
-  Lint["Lint CloudFormation Templates"]
-  AWS["Configure AWS Credentials"]
-  KeyPair["Create EC2 Key Pair from SSM"]
-  CFN["Deploy CloudFormation Stack (EC2 + RDS)"]
-  DockerBuild["Build & Push Docker Image to ECR"]
-  AppDeploy["Deploy App to EC2 via SSM"]
-  Tar["Tar & Base64 Encode Monitoring Files"]
-  MonitoringDeploy["Deploy Monitoring Stack via SSM"]
-  Test["Functional Test with Playwright"]
+flowchart LR
+  A[🟢 Push to main] --> B[🧪 Lint<br/>CloudFormation Templates]
+  B --> C[🔐 Configure AWS Credentials]
+  C --> D[🗝️ Import EC2 Key Pair]
+  D --> E[🏗️ Deploy Infra<br/>(EC2 + RDS)]
+  E --> F[🐳 Build + Push Docker Image<br/>to ECR]
+  F --> G[🚀 Deploy App to EC2<br/>via SSM]
+  G --> H[📦 Encode Monitoring Files]
+  H --> I[📈 Deploy Monitoring Stack<br/>via SSM]
+  I --> J[🧪 Run Playwright Tests]
 
-  Push --> Checkout
-  Checkout --> Lint
-  Lint --> AWS
-  AWS --> KeyPair
-  KeyPair --> CFN
-  CFN --> DockerBuild
-  DockerBuild --> AppDeploy
-  AppDeploy --> Tar
-  Tar --> MonitoringDeploy
-  MonitoringDeploy --> Test
+  style A fill:#00b894,color:#fff
+  style J fill:#6c5ce7,color:#fff
 ```
 ## ☁️ AWS Deployment
 
