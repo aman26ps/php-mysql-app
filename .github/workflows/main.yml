@@ -1,0 +1,30 @@
+name: PHP MySQL App CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  infrastructure:
+    uses: ./.github/workflows/infrastructure.yml
+    needs: lint
+
+  docker:
+    uses: ./.github/workflows/docker.yml
+    needs: lint
+
+  deploy-app-monitoring:
+    uses: ./.github/workflows/deploy-app-monitoring.yml
+    needs: [infrastructure, docker]
+
+  functional-test:
+    uses: ./.github/workflows/functional-test.yml
+    needs: deploy-app
