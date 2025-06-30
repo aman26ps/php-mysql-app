@@ -228,7 +228,7 @@ jobs:
               "ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose",
 
               "echo ✅ Creating shared Docker network if not exists...",
-              "if ! docker network inspect monitor-net >/dev/null 2>&1; then docker network create monitor-net; fi"
+              "if ! docker network inspect monitor-net >/dev/null 2>&1; then docker network create monitor-net; fi",
 
               "echo ✅ Fetching Grafana token from SSM...",
               "export GRAFANA_BEARER_TOKEN=$(aws ssm get-parameter --name /phpapp/grafana-api-key --with-decryption --query Parameter.Value --output text --region us-east-1)",
