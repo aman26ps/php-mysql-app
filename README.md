@@ -63,23 +63,21 @@ App available at: `http://localhost:8080`
 
 ---
 
-## CICD Workflow Diagram
-
 ## 🔁 CI/CD Workflow Diagram
 
 ```mermaid
 flowchart TD
-  Push[Push to main branch]
-  Checkout[Checkout Code]
-  Lint[Lint CloudFormation Templates]
-  AWS[Configure AWS Credentials]
-  KeyPair[Create EC2 Key Pair from SSM]
-  CFN[Deploy CloudFormation Stack (EC2 + RDS)]
-  DockerBuild[Build & Push Docker Image to ECR]
-  AppDeploy[Deploy App to EC2 via SSM]
-  Tar[Tar & Base64 Encode Monitoring Files]
-  MonitoringDeploy[Deploy Monitoring Stack via SSM]
-  Test[Functional Test with Playwright]
+  Push["Push to main branch"]
+  Checkout["Checkout Code"]
+  Lint["Lint CloudFormation Templates"]
+  AWS["Configure AWS Credentials"]
+  KeyPair["Create EC2 Key Pair from SSM"]
+  CFN["Deploy CloudFormation Stack (EC2 + RDS)"]
+  DockerBuild["Build & Push Docker Image to ECR"]
+  AppDeploy["Deploy App to EC2 via SSM"]
+  Tar["Tar & Base64 Encode Monitoring Files"]
+  MonitoringDeploy["Deploy Monitoring Stack via SSM"]
+  Test["Functional Test with Playwright"]
 
   Push --> Checkout
   Checkout --> Lint
