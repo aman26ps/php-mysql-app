@@ -12,21 +12,33 @@ prometheus.remote_write "grafana" {
 
 prometheus.scrape "php_app" {
   targets = [
-    { url = "http://php_app:80/metrics.php" },
+    {
+      __address__ = "php_app:80",
+      job         = "php_app",
+    },
   ]
-  forward_to = [prometheus.remote_write.grafana.receiver]
-}
-
-prometheus.scrape "cadvisor" {
-  targets = [
-    { url = "http://cadvisor:8080/metrics" },
-  ]
-  forward_to = [prometheus.remote_write.grafana.receiver]
+  forward_to      = [prometheus.remote_write.grafana.receiver]
+  job_name        = "php_app"
 }
 
 prometheus.scrape "node_exporter" {
   targets = [
-    { url = "http://node-exporter:9100/metrics" },
+    {
+      __address__ = "node-exporter:9100",
+      job         = "node_exporter",
+    },
   ]
-  forward_to = [prometheus.remote_write.grafana.receiver]
+  forward_to      = [prometheus.remote_write.grafana.receiver]
+  job_name        = "node_exporter"
+}
+
+prometheus.scrape "cadvisor" {
+  targets = [
+    {
+      __address__ = "cadvisor:8080",
+      job         = "cadvisor",
+    },
+  ]
+  forward_to      = [prometheus.remote_write.grafana.receiver]
+  job_name        = "cadvisor"
 }
