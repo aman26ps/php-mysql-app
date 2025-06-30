@@ -16,15 +16,23 @@ jobs:
   infrastructure:
     uses: ./.github/workflows/infrastructure.yml
     needs: lint
+    with:
+      aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
 
   docker:
     uses: ./.github/workflows/docker.yml
     needs: lint
+    with:
+      aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
 
   deploy-app-monitoring:
     uses: ./.github/workflows/deploy-app-monitoring.yml
     needs: [infrastructure, docker]
+    with:
+      aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
 
   functional-test:
     uses: ./.github/workflows/functional-test.yml
     needs: deploy-app-monitoring
+    with:
+      aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
