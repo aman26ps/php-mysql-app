@@ -67,16 +67,16 @@ App available at: `http://localhost:8080`
 
 ```mermaid
 flowchart LR
-  A[Push to main]
-  B[Lint CloudFormation]
-  C[Configure AWS credentials]
-  D[Create EC2 Key Pair]
-  E[Deploy Infra (EC2 & RDS)]
-  F[Build & Push Docker image]
-  G[Deploy App via SSM]
-  H[Tar + Encode Monitoring Files]
-  I[Deploy Monitoring via SSM]
-  J[Run Functional Tests]
+  A["Push to main"]
+  B["Lint CloudFormation"]
+  C["Configure AWS credentials"]
+  D["Create EC2 Key Pair"]
+  E["Deploy Infra - EC2 and RDS"]
+  F["Build and Push Docker image"]
+  G["Deploy App via SSM"]
+  H["Encode Monitoring Files"]
+  I["Deploy Monitoring via SSM"]
+  J["Run Functional Tests"]
 
   A --> B --> C --> D --> E --> F --> G --> H --> I --> J
 ```
